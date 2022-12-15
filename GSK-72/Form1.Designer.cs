@@ -175,7 +175,7 @@
             "Треугольник",
             "Куб",
             "Звезда",
-            "Угол 13"});
+            "Угол 3"});
             this.comboBoxFigure.Location = new System.Drawing.Point(7, 14);
             this.comboBoxFigure.Name = "comboBoxFigure";
             this.comboBoxFigure.Size = new System.Drawing.Size(122, 23);

@@ -7,18 +7,19 @@ namespace GSK_72
             Triangle,
             Box,
             Star,
-            Ugl13
+            Ugl3
         }
         private readonly Graphics g;
         private readonly Bitmap bitmap;
         FigureEnum figureSelected;
         Pen DrawPen = new Pen(Color.Black, 1);
-        private List<CustomPoint> Points = new List<CustomPoint>();
+        List<CustomPoint> Points = new List<CustomPoint>();
         List<FigureClass> Figures = new List<FigureClass>();
         int[] setQ = new int[2];
         int AngleCount = 0;
         bool isSplineChecked = false;
         bool isFigureFormed = false;
+        bool isTMODone = false;
         int GeomAction = 0;
         int Yemax = 0;
         int Xemin = 0;
@@ -32,19 +33,17 @@ namespace GSK_72
             g = Graphics.FromImage(bitmap);
             Yemax = pictureBox1.Height;
             Xemax = pictureBox1.Width;
-            MouseWheel += GeomTrans;
+            MouseWheel += GTonTMOAndFigures;
         }
 
         /// <summary>
         /// Метод, закрашивающий фигуру, а также добавляет фигуру в список фигур
         /// </summary>
-        private void MakeFill()
+        private void MakeFill(FigureClass figure)
         {
-            FigureClass figure = new FigureClass(Points.ToList(), DrawPen, g);
-            figure.FillFigure(Yemax);
-            Figures.Add(figure);
+            if(isSplineChecked) figure.CreateCubeSpline();
+            else figure.FillFigure(Yemax);
             pictureBox1.Image = bitmap;
-            Points.Clear();
         }
 
         /// <summary>
@@ -68,6 +67,8 @@ namespace GSK_72
                 var B = Figures[1].CalculateXlAndXr(Y, 0);
                 Xbl = B[0];
                 Xbr = B[1];
+
+                if (Xal.Count == 0 && Xbl.Count == 0) continue;
 
                 var arrM = new M[Xal.Count * 2 + Xbl.Count * 2];
                 var n = Xal.Count;
@@ -128,185 +129,41 @@ namespace GSK_72
             }
         }
 
-        private void GeomTrans(object sender, MouseEventArgs e)
+        private void GTonTMOAndFigures(object sender, MouseEventArgs e) 
+        {
+            if (isTMODone)
+            {
+                GeomTrans(Figures[Figures.Count - 1], e);
+                GeomTrans(Figures[Figures.Count - 2], e);
+                g.Clear(Color.White);
+                TMO();
+                pictureBox1.Image = bitmap;
+            }
+            else GeomTrans(Figures[Figures.Count - 1], e);
+        }
+
+        private void GeomTrans(FigureClass buff, MouseEventArgs e)
         {
             if (GeomAction == 0)
             {
                 g.Clear(Color.White);
-                Zoom(new float[] { e.Delta, e.Delta }, e);
-                if (isSplineChecked) PreparationsForSpline();
-                else MakeFill();
-                pictureBox1.Image = bitmap;
+                buff.Zoom(new float[] { e.Delta, e.Delta }, e);
+                MakeFill(buff);
             }
             else if (GeomAction == 1)
             {
                 g.Clear(Color.White);
-                Mirror('c', e, null);
-                MakeFill();
-                pictureBox1.Image = bitmap;
+                buff.Mirror('c', e, null);
+                MakeFill(buff);
             }
             else if (GeomAction == 2)
             {
-                List<CustomPoint> line = Figures[1].GetPoints().ToList();
+                List<CustomPoint> line = new List<CustomPoint>(Points.ToList());
                 g.Clear(Color.White);
-                Mirror('p', e, line);
-                MakeFill();
-                pictureBox1.Image = bitmap;
+                buff.Mirror('p', e, line);
+                MakeFill(buff);
             }
         }
-
-        private void Zoom(float[] zoom, MouseEventArgs eventMouse)
-        {
-            Points = Figures[Figures.Count - 1].GetPoints();
-            if (zoom[0] <= 0) zoom[0] = -0.1f;
-            if (zoom[1] <= 0) zoom[1] = -0.1f;
-            if (zoom[0] >= 0) zoom[0] = 0.1f;
-            if (zoom[1] >= 0) zoom[1] = 0.1f;
-
-            var sx = 1 + zoom[0];
-            var sy = 1 + zoom[1];
-            float[,] matrix =
-            {
-                {sx, 0, 0},
-                {0, sy, 0},
-                {0, 0, 1}
-            };
-
-            var e = new Point(eventMouse.X, eventMouse.Y);
-
-            float[,] toCenter =
-            {
-                {1, 0, 0},
-                {0, 1, 0},
-                {-e.X, -e.Y, 1}
-            };
-            for (var i = 0; i < Points.Count; i++)
-                Points[i] = Matrix_1x3_3x3(Points[i], toCenter);
-
-            for (var i = 0; i < Points.Count; i++)
-                Points[i] = Matrix_1x3_3x3(Points[i], matrix);
-
-            float[,] fromCenter =
-            {
-                {1, 0, 0},
-                {0, 1, 0},
-                {e.X, e.Y, 1}
-            };
-            for (var i = 0; i < Points.Count; i++)
-                Points[i] = Matrix_1x3_3x3(Points[i], fromCenter);
-        }
-
-        public void Mirror(char ch, MouseEventArgs eventMouse, List<CustomPoint> line)
-        {
-            if (Figures.Count == 2) Points = Figures[0].GetPoints();
-            else Points = Figures[Figures.Count - 1].GetPoints();
-            //var matrix = new float[3, 3];
-            switch (ch)
-            {
-                case 'c':
-                    {
-                        var matrix = new float[,]
-                        {
-                        {-1, 0, 0},
-                        {0, -1, 0},
-                        {0, 0, 1}
-                        };
-
-                        var e = new CustomPoint(eventMouse.X, eventMouse.Y);
-
-                        float[,] toCenter =
-                        {
-                            {1, 0, 0},
-                            {0, 1, 0},
-                            {-e.X, -e.Y, 1}
-                        };
-
-                        for (var i = 0; i < Points.Count; i++)
-                            Points[i] = Matrix_1x3_3x3(Points[i], toCenter);
-
-                        for (var i = 0; i < Points.Count; i++)
-                            Points[i] = Matrix_1x3_3x3(Points[i], matrix);
-
-                        float[,] fromCenter =
-                                    {
-                            {1, 0, 0},
-                            {0, 1, 0},
-                            {e.X, e.Y, 1}
-                        };
-
-                        for (var i = 0; i < Points.Count; i++)
-                            Points[i] = Matrix_1x3_3x3(Points[i], fromCenter);
-
-                        break;
-                    }
-                case 'p':
-                    {
-                        float Dx = line[1].ToPoint().X - line[0].ToPoint().X;
-                        float Dy = line[1].ToPoint().Y - line[0].ToPoint().Y;
-                        float length = (float)Math.Sqrt(Math.Pow(Dx, 2) + Math.Pow(Dy, 2));
-                        float Sn = Dy / length;
-                        float Cs = Dx / length;
-
-                        var r = new float[,]
-                        {
-                        {Cs, -Sn, 0},
-                        {Sn, Cs, 0},
-                        {0, 0, 1}
-                        };
-
-                        float[,] m =
-                        {
-                            {1, 0, 0},
-                            {0, 1, 0},
-                            {-line[0].X, -line[0].Y, 1}
-                        };
-
-                        for (var i = 0; i < Points.Count; i++)
-                            Points[i] = Matrix_1x3_3x3(Points[i], m);
-
-                        for (var i = 0; i < Points.Count; i++)
-                            Points[i] = Matrix_1x3_3x3(Points[i], r);
-
-                        float[,] s =
-                        {
-                            {1, 0, 0},
-                            {0, -1, 0},
-                            {0, 0, 1}
-                        };
-
-                        for (var i = 0; i < Points.Count; i++)
-                            Points[i] = Matrix_1x3_3x3(Points[i], s);
-
-                        float[,] r_1 =
-                        {
-                            {Cs, Sn, 0 },
-                            {-Sn, Cs, 0 },
-                            {0, 0, 1 }
-                        };
-
-                        for (var i = 0; i < Points.Count; i++)
-                            Points[i] = Matrix_1x3_3x3(Points[i], r_1);
-
-                        float[,] m_1 =
-                        {
-                            {1, 0, 0 },
-                            {0, 1, 0 },
-                            { line[1].X, line[1].Y, 1 }
-                        };
-
-                        for (var i = 0; i < Points.Count; i++)
-                            Points[i] = Matrix_1x3_3x3(Points[i], m_1);
-                        break;
-                    }
-            }
-        }
-
-        private static CustomPoint Matrix_1x3_3x3(CustomPoint point, float[,] matrix3X3) => new CustomPoint
-        {
-            X = (int)(point.X * matrix3X3[0, 0] + point.Y * matrix3X3[1, 0] + point.C * matrix3X3[2, 0]),
-            Y = (int)(point.X * matrix3X3[0, 1] + point.Y * matrix3X3[1, 1] + point.C * matrix3X3[2, 1]),
-            C = (int)(point.X * matrix3X3[0, 2] + point.Y * matrix3X3[1, 2] + point.C * matrix3X3[2, 2])
-        };
 
         /// <summary>
         /// Метод, сортирующий массив М
@@ -335,9 +192,9 @@ namespace GSK_72
         {
             var triangle = new List<CustomPoint>
             {
-                new CustomPoint(e.X, e.Y - 200),
-                new CustomPoint(e.X + 200, e.Y + 100),
-                new CustomPoint(e.X - 200, e.Y + 100)
+                new CustomPoint(e.X, e.Y - 150),
+                new CustomPoint(e.X + 150, e.Y + 75),
+                new CustomPoint(e.X - 150, e.Y + 75)
             };
             Points = triangle;
         }
@@ -360,14 +217,14 @@ namespace GSK_72
         /// Создание фигуры "Угол 13"
         /// </summary>
         /// <param name="e"></param>
-        public void CreateUgl13(MouseEventArgs e)
+        public void CreateUgl3(MouseEventArgs e)
         {
             var ug = new List<CustomPoint>
             {
                 new CustomPoint(e.X - 100, e.Y - 100),
-                new CustomPoint(e.X - 100, e.Y + 100),
+                new CustomPoint(e.X - 40, e.Y + 40),
                 new CustomPoint(e.X + 100, e.Y + 100),
-                new CustomPoint(e.X + 30, e.Y + 70),
+                new CustomPoint(e.X - 100, e.Y + 100),
             };
             Points = ug;
         }
@@ -392,46 +249,6 @@ namespace GSK_72
             Points = star;
         }
 
-        /// <summary>
-        /// Отрисовка кубического сплайна
-        /// </summary>
-        public void CreateCubeSpline()
-        {
-            PointF[] L = new PointF[4]; // Матрица вещественных коэффициентов
-            Point Pv1 = Points[0].ToPoint();
-            Point Pv2 = Points[0].ToPoint();
-            const double dt = 0.04;
-            double t = 0;
-            double xt, yt;
-            Point Ppred = Points[0].ToPoint(), Pt = Points[0].ToPoint();
-
-            // Касательные векторы
-            Pv1.X = 4 * (Points[1].X - Points[0].X);
-            Pv1.Y = 4 * (Points[1].Y - Points[0].Y);
-            Pv2.X = 4 * (Points[3].X - Points[2].X);
-            Pv2.Y = 4 * (Points[3].Y - Points[2].Y);
-
-            // Коэффициенты полинома
-            L[0].X = 2 * Points[0].X - 2 * Points[2].X + Pv1.X + Pv2.X;  // Ax
-            L[0].Y = 2 * Points[0].Y - 2 * Points[2].Y + Pv1.Y + Pv2.Y;  // Ay
-            L[1].X = -3 * Points[0].X + 3 * Points[2].X - 2 * Pv1.X - Pv2.X; // Bx
-            L[1].Y = -3 * Points[0].Y + 3 * Points[2].Y - 2 * Pv1.Y - Pv2.Y; // By
-            L[2].X = Pv1.X; // Cx
-            L[2].Y = Pv1.Y; // Cy
-            L[3].X = Points[0].X; // Dx
-            L[3].Y = Points[0].Y; // Dy
-
-            while (t < 1 + dt / 2)
-            {
-                xt = ((L[0].X * t + L[1].X) * t + L[2].X) * t + L[3].X; yt = ((L[0].Y * t + L[1].Y) * t + L[2].Y) * t + L[3].Y;
-                Pt.X = (int)Math.Round(xt);
-                Pt.Y = (int)Math.Round(yt);
-                g.DrawLine(DrawPen, Ppred, Pt);
-                Ppred = Pt;
-                t = t + dt;
-            }
-        }
-
         public void PreparationsForSpline()
         {
             switch (CountPoints)
@@ -445,8 +262,8 @@ namespace GSK_72
                 case 3: // второй вектор
                     {
                         g.DrawLine(DrawPen, Points[2].ToPoint(), Points[3].ToPoint());
-                        CreateCubeSpline();
                         FigureClass spline = new FigureClass(Points.ToList(), DrawPen, g);
+                        spline.CreateCubeSpline();
                         Figures.Add(spline);
                         Points.Clear();
                         CountPoints = 0;
@@ -477,14 +294,14 @@ namespace GSK_72
                 case FigureEnum.Star:
                     CreateStar(e);
                     break;
-                case FigureEnum.Ugl13:
-                    CreateUgl13(e);
+                case FigureEnum.Ugl3:
+                    CreateUgl3(e);
                     break;
                 default:
                     throw new ArgumentOutOfRangeException();
             }
         }
-        
+
         private void comboBoxFigure_SelectedIndexChanged(object sender, EventArgs e)
         {
             switch (comboBoxFigure.SelectedIndex)
@@ -499,14 +316,14 @@ namespace GSK_72
                     figureSelected = FigureEnum.Star;
                     break;
                 case 3:
-                    figureSelected = FigureEnum.Ugl13;
+                    figureSelected = FigureEnum.Ugl3;
                     break;
             }
 
             isFigureFormed = true;
         }
 
-        private void comboBoxAngle_SelectedIndexChanged(object sender, EventArgs e)=> 
+        private void comboBoxAngle_SelectedIndexChanged(object sender, EventArgs e) =>
             AngleCount = comboBoxAngle.SelectedIndex + 5;
 
         private void checkBoxSpline_CheckedChanged(object sender, EventArgs e)
@@ -538,6 +355,7 @@ namespace GSK_72
                 TMO();
                 pictureBox1.Image = bitmap;
                 Points.Clear();
+                isTMODone = true;
             }
 
         }
@@ -553,7 +371,7 @@ namespace GSK_72
                     GeomAction = 1;
                     break;
                 case 2:
-                    GeomAction= 2;
+                    GeomAction = 2;
                     break;
             }
         }
@@ -589,20 +407,23 @@ namespace GSK_72
 
         private void pictureBox1_MouseDown(object sender, MouseEventArgs e)
         {
-            if(isFigureFormed)
+            if (isFigureFormed)
             {
                 CreateFigure(e);
-                MakeFill();
+                FigureClass figure = new FigureClass(Points.ToList(), DrawPen, g);
+                MakeFill(figure);
+                Figures.Add(figure);
+                Points.Clear();
                 isFigureFormed = false;
             }
-            
+
             else if (e.Button == MouseButtons.Left && isSplineChecked)
             {
                 Points.Add(new CustomPoint { X = e.X, Y = e.Y });
                 g.DrawEllipse(DrawPen, e.X - 2, e.Y - 2, 5, 5);
                 PreparationsForSpline();
             }
-            
+
             else if (e.Button == MouseButtons.Left)
             {
                 Points.Add(new CustomPoint(e.X, e.Y));
@@ -611,10 +432,16 @@ namespace GSK_72
                     g.DrawLine(DrawPen, Points[Points.Count - 2].ToPoint(), Points[Points.Count - 1].ToPoint());
                     pictureBox1.Image = bitmap;
                 }
-                
+
             }
-            
-            else if (e.Button == MouseButtons.Right) MakeFill();
+
+            else if (e.Button == MouseButtons.Right)
+            {
+                FigureClass figure = new FigureClass(Points.ToList(), DrawPen, g);
+                MakeFill(figure);
+                Figures.Add(figure);
+                Points.Clear();
+            }
         }
     }
 }
